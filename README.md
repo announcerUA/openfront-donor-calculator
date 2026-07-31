@@ -1,4 +1,4 @@
-# OpenFront Donor Calc Pro
+# OpenFront Donor calculator (Probably a cheat)
 
 A Chrome extension for [openfront.io](https://openfront.io/) that tells you **exactly what to set the troop slider to** when donating to an ally — and sets it for you with one click.
 
