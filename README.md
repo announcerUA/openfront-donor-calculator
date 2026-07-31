@@ -1,5 +1,9 @@
 # OpenFront Donor Calc Pro
 
+<blockquote>
+⚠️ <strong>Disclaimer:</strong> This script may or may not violate OpenFront.io's Terms of Service. This script is for educational purposes and does not automate any actions — it only visualizes existing game data. The author is not responsible for any issues, damages, or consequences arising from the use of this script (including account bans). Use at your own risk.
+</blockquote>
+
 A Chrome extension for [openfront.io](https://openfront.io/) that tells you **exactly what to set the troop slider to** when donating to an ally — and sets it for you with one click.
 
 The game shows how many troops you have. It does not tell you how many you can afford to give away. This overlay does the arithmetic every 400 ms and keeps a single number on screen.
