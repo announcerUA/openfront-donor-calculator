@@ -98,5 +98,4 @@ Chrome and Chromium-based browsers (Edge, Brave, Opera) with Manifest V3 support
 ---
 
 ## Licence
-
-Apache-2.0 license.
+[Apache-2.0 license.](https://github.com/announcerUA/openfront-donor-calculator?tab=Apache-2.0-1-ov-file)
