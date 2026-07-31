@@ -1,4 +1,4 @@
-# OpenFront Donor Calc Pro
+# OpenFront Donor Сalculator
 
 <blockquote>
 ⚠️ <strong>Disclaimer:</strong> This script may or may not violate OpenFront.io's Terms of Service. This script is for educational purposes and does not automate any actions — it only visualizes existing game data. The author is not responsible for any issues, damages, or consequences arising from the use of this script (including account bans). Use at your own risk.
