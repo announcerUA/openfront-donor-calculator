@@ -21,6 +21,23 @@
   const SAMPLE_INTERVAL_MS = 400;
   /** Minimum delay between full DOM sweeps when the cached node is stale. */
   const RESCAN_COOLDOWN_MS = 1000;
+  /** Same, while the page does not look like a running match. */
+  const IDLE_RESCAN_COOLDOWN_MS = 4000;
+
+  /* Zone marker geometry. */
+  const MARKER_ID = 'ofdc-bar-marker';
+  const MARKER_HEIGHT_PX = 4;
+  /** Clearance between the strip and the game's bar, so nothing is covered. */
+  const MARKER_GAP_PX = 3;
+  /** How far the position pin sticks out above and below the strip. */
+  const MARKER_PIN_OVERHANG_PX = 3;
+  /** Ancestors examined above the counter when looking for the bar. */
+  const BAR_SEARCH_DEPTH = 10;
+  /** Narrower elements than this are text boxes, not progress bars. */
+  const MIN_BAR_WIDTH_PX = 80;
+  /** Height bounds of a single HUD row. */
+  const MIN_BAR_HEIGHT_PX = 8;
+  const MAX_BAR_HEIGHT_PX = 64;
   /** How long the previous hint stays on screen once the counter disappears. */
   const STALE_ADVICE_MS = 3000;
   /** Distance from the bottom used the first time the overlay is shown. */
@@ -58,12 +75,29 @@
   const BASE_SHADOW = '0 2px 8px rgba(0, 0, 0, 0.45)';
 
   /** `1.5K / 12.1K`, `903/2400`, `1.2M / 3M` — all game-side spellings. */
-  const COUNTER_PATTERN = /(\d+(?:[.,]\d+)?)\s*([KM]?)\s*\/\s*(\d+(?:[.,]\d+)?)\s*([KM]?)/i;
+  const COUNTER_PATTERN = /(\d+(?:[.,]\d+)?)\s*([KMB]?)\s*\/\s*(\d+(?:[.,]\d+)?)\s*([KMB]?)/i;
+
+  /**
+   * HUD hosts, most specific first. Used to anchor scans; missing elements are
+   * simply skipped, so the list can safely outlive a game-side rename.
+   */
+  const HUD_SELECTORS = ['control-panel', 'player-panel', 'game-left-sidebar'];
+
+  /** Matches the in-game routes (`/game/…`, `/w3/game/…`). */
+  const MATCH_PAGE_PATTERN = /\/(?:w\d+\/)?game(?:\/|$)/;
+
+  const isMatchPage = () => MATCH_PAGE_PATTERN.test(location.pathname);
 
   /** @type {HTMLDivElement|null} */
   let widget = null;
   /** @type {Element|null} Cached node that holds the troop counter. */
   let counterNode = null;
+  /** @type {HTMLDivElement|null} Zone strip drawn over the game's troop bar. */
+  let marker = null;
+  /** @type {HTMLDivElement|null} Current-position pin inside the strip. */
+  let markerPin = null;
+  /** @type {Element|null} Cached game troop bar the strip aligns with. */
+  let barNode = null;
   /** @type {HTMLInputElement|null} Cached troop-ratio slider. */
   let sliderNode = null;
   /** Percentage currently advised, or `null` while accumulating. */
@@ -298,16 +332,18 @@
    * @returns {number}
    */
   function parseCompactNumber(value, suffix) {
-    const magnitude = { K: 1e3, M: 1e6 }[suffix.toUpperCase()] ?? 1;
+    const magnitude = { K: 1e3, M: 1e6, B: 1e9 }[suffix.toUpperCase()] ?? 1;
     return Number.parseFloat(value.replace(',', '.')) * magnitude || 0;
   }
 
   /** Formats a troop count the way the game's HUD does. */
   function formatCompactNumber(value) {
+    if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
     if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
     if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
     return String(Math.floor(value));
   }
+
 
   /**
    * Elements that either carry no user-visible text or are prohibitively
@@ -358,17 +394,18 @@
   }
 
   /**
-   * Single bottom-up pass that returns both the text of a subtree and the
-   * deepest rendered element whose text contains the troop counter.
+   * Single bottom-up pass returning a subtree's text together with the deepest
+   * rendered element whose own text satisfies `pattern`.
    *
    * Caching that element is what keeps sampling cheap: re-reading one small
    * node costs nothing, whereas `document.body.innerText` forces a full layout
    * on every tick.
    *
    * @param {Node} root
+   * @param {RegExp} pattern
    * @returns {{text: string, match: Element|null}}
    */
-  function scanForCounter(root) {
+  function scanChildren(root, pattern) {
     let text = '';
     let match = null;
 
@@ -383,22 +420,86 @@
         continue;
       }
 
-      let childText = '';
-      if (child.shadowRoot) {
-        const shadow = scanForCounter(child.shadowRoot);
-        childText += shadow.text;
-        match ??= shadow.match;
-      }
-      const light = scanForCounter(child);
-      childText += light.text;
-      match ??= light.match;
-
-      text += childText;
-      // Only considered when no descendant matched, which yields the deepest hit.
-      if (!match && COUNTER_PATTERN.test(childText) && isRendered(child)) match = child;
+      const result = scanElement(child, pattern);
+      text += result.text;
+      match ??= result.match;
     }
 
     return { text, match };
+  }
+
+  /**
+   * Same scan for a single element, its own shadow tree included. Split from
+   * `scanChildren` so a scan can start at an arbitrary host element — the game
+   * HUD is one — rather than only at a document or shadow root.
+   *
+   * @param {Element} element
+   * @param {RegExp} pattern
+   * @returns {{text: string, match: Element|null}}
+   */
+  function scanElement(element, pattern) {
+    let text = '';
+    let match = null;
+
+    if (element.shadowRoot) {
+      const shadow = scanChildren(element.shadowRoot, pattern);
+      text += shadow.text;
+      match ??= shadow.match;
+    }
+    const light = scanChildren(element, pattern);
+    text += light.text;
+    match ??= light.match;
+
+    // Considered only when no descendant matched, which yields the deepest hit.
+    if (!match && pattern.test(text) && isRendered(element)) match = element;
+    return { text, match };
+  }
+
+  /**
+   * The in-game HUD, or `null` when it is not on screen.
+   *
+   * @returns {Element|null}
+   */
+  function hudRoot() {
+    for (const selector of HUD_SELECTORS) {
+      const element = document.querySelector(selector);
+      if (element && isRendered(element)) return element;
+    }
+    return null;
+  }
+
+  /**
+   * Whether `node` sits inside `root`, shadow boundaries included.
+   *
+   * @param {Node|null} node
+   * @param {Node} root
+   * @returns {boolean}
+   */
+  function isWithin(node, root) {
+    for (let current = node; current; current = current.parentElement ?? current.getRootNode()?.host ?? null) {
+      if (current === root) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Finds the deepest rendered element matching `pattern`.
+   *
+   * Confined to the HUD, because the rest of the page is full of `x / y` text
+   * that looks exactly like a troop counter — lobby player counts on the menu
+   * being the obvious trap. The document-wide sweep is therefore allowed only
+   * while a match is running, as a safety net for a future HUD rename.
+   *
+   * @param {RegExp} pattern
+   * @returns {Element|null}
+   */
+  function findNode(pattern) {
+    const hud = hudRoot();
+    if (hud) {
+      const found = scanElement(hud, pattern).match;
+      if (found) return found;
+    }
+    return isMatchPage() ? scanElement(document.body, pattern).match : null;
   }
 
   /**
@@ -408,23 +509,34 @@
    * @returns {{current: number, max: number}|null}
    */
   function readTroopCounter() {
-    // A cached node is only trusted while it is attached and still rendered:
-    // the HUD is torn down and rebuilt on every map transition.
-    if (counterNode && !(counterNode.isConnected && isRendered(counterNode))) counterNode = null;
+    // A cached node is only trusted while it is attached, still rendered, and —
+    // once the HUD exists — still part of it. Without the last check a node
+    // picked up on the menu would survive into the match and keep feeding the
+    // overlay a lobby's player count.
+    const hud = hudRoot();
+    const cacheValid = counterNode?.isConnected &&
+                       isRendered(counterNode) &&
+                       (!hud || isWithin(counterNode, hud));
+    if (!cacheValid) counterNode = null;
 
     let match = counterNode ? COUNTER_PATTERN.exec(deepTextContent(counterNode)) : null;
 
     if (!match) {
       const now = Date.now();
-      if (now - lastRescanAt < RESCAN_COOLDOWN_MS) return null;
+      // Outside a match there is nothing to find, so sweeps are spaced further
+      // apart. Deliberately a slowdown and not a hard gate: if the game ever
+      // changes its URL scheme, the overlay degrades in speed, not in function.
+      const cooldown = isMatchPage() ? RESCAN_COOLDOWN_MS : IDLE_RESCAN_COOLDOWN_MS;
+      if (now - lastRescanAt < cooldown) return null;
       lastRescanAt = now;
 
-      counterNode = scanForCounter(document.body).match;
+      counterNode = findNode(COUNTER_PATTERN);
       match = counterNode ? COUNTER_PATTERN.exec(deepTextContent(counterNode)) : null;
 
       // Last resort: `innerText` is layout-based, so it sees rendered shadow
-      // content the walk above may have missed in an exotic HUD layout.
-      if (!match) {
+      // content the walk above may have missed. Restricted to a running match —
+      // on the menu it would happily read the lobby list.
+      if (!match && isMatchPage()) {
         counterNode = null;
         match = COUNTER_PATTERN.exec(document.body.innerText);
       }
@@ -436,6 +548,148 @@
     return max > 0 && current > 0 ? { current, max } : null;
   }
 
+  /* ------------------------------------------------------------------ *
+   * Zone marker drawn over the game's troop bar
+   * ------------------------------------------------------------------ */
+
+  /**
+   * Locates the game's troop bar without relying on its class names.
+   *
+   * The bar is identified by behaviour rather than markup: starting from the
+   * counter, the first ancestor wide enough to be a bar and containing a child
+   * whose width is the current fill ratio *is* the bar. That test verifies
+   * itself against live numbers, so a HUD restyle cannot silently point the
+   * marker at the wrong element.
+   *
+   * @param {number} ratio Current troops divided by the cap.
+   * @returns {Element|null}
+   */
+  function findTroopBar(ratio) {
+    if (barNode?.isConnected && isRendered(barNode)) return barNode;
+
+    // The counter may have come from the `innerText` fallback, which caches no
+    // node; locate one so the walk has a starting point.
+    if (!counterNode) counterNode = findNode(COUNTER_PATTERN);
+    if (!counterNode) return null;
+
+    // The innermost bar-shaped element wins. In the game the counter is painted
+    // across the whole bar, so the counter itself already has the bar's extent;
+    // where a HUD instead uses a narrow label, the walk climbs to the first
+    // ancestor wide enough to be a bar. Climbing any further would land on the
+    // HUD row, which is wider than the bar and would misplace the strip.
+    for (let node = counterNode, depth = 0; node && depth < BAR_SEARCH_DEPTH; depth++) {
+      const rect = node.getBoundingClientRect();
+
+      // Above a single row's height lie panels; aligning to those is meaningless.
+      if (rect.height > MAX_BAR_HEIGHT_PX) break;
+
+      if (rect.width >= MIN_BAR_WIDTH_PX && rect.height >= MIN_BAR_HEIGHT_PX) {
+        barNode = node;
+        return node;
+      }
+
+      // `host` continues the walk out of a shadow tree into its host element.
+      node = node.parentElement ?? node.getRootNode()?.host ?? null;
+    }
+
+    barNode = null;
+    return null;
+  }
+
+  /** Builds the marker strip once; it is repositioned, never rebuilt. */
+  function createMarker() {
+    if (marker) return;
+
+    marker = document.createElement('div');
+    marker.id = MARKER_ID;
+    Object.assign(marker.style, {
+      position: 'fixed',
+      display: 'none',
+      height: `${MARKER_HEIGHT_PX}px`,
+      borderRadius: '2px',
+      overflow: 'visible',
+      pointerEvents: 'none',
+      zIndex: '2147482999',
+      // Hard stops, not a blend: the reserve boundary is a decision, not a mood.
+      background: `linear-gradient(to right,
+        ${PALETTE.saving}59 0%,
+        ${PALETTE.saving}59 ${RESERVE_RATIO * 100}%,
+        ${PALETTE.ready}59 ${RESERVE_RATIO * 100}%,
+        ${PALETTE.ready}59 100%)`
+    });
+
+    // Where donating starts paying off.
+    const targetTick = document.createElement('div');
+    Object.assign(targetTick.style, {
+      position: 'absolute',
+      top: '-2px',
+      bottom: '-2px',
+      width: '2px',
+      left: `${TARGET_RATIO * 100}%`,
+      transform: 'translateX(-50%)',
+      background: 'rgba(255, 255, 255, 0.85)',
+      borderRadius: '1px'
+    });
+    marker.appendChild(targetTick);
+
+    // Where the player currently stands.
+    markerPin = document.createElement('div');
+    Object.assign(markerPin.style, {
+      position: 'absolute',
+      top: `-${MARKER_PIN_OVERHANG_PX}px`,
+      bottom: `-${MARKER_PIN_OVERHANG_PX}px`,
+      width: '3px',
+      transform: 'translateX(-50%)',
+      borderRadius: '2px',
+      transition: 'left 0.25s ease, background 0.25s ease'
+    });
+    marker.appendChild(markerPin);
+
+    document.body.appendChild(marker);
+  }
+
+  const hideMarker = () => { if (marker) marker.style.display = 'none'; };
+
+  /**
+   * Aligns the strip with the game's bar and moves the pin.
+   *
+   * The strip is a sibling of the page, positioned over the bar every tick,
+   * rather than a child injected into the game's own container: the game owns
+   * its DOM, and a HUD re-render can never wipe something it does not contain.
+   *
+   * @param {{current: number, max: number}|null} troops
+   */
+  function renderMarker(troops) {
+    if (!marker || !state.visible || !troops) {
+      hideMarker();
+      return;
+    }
+
+    const ratio = Settings.clamp(troops.current / troops.max, 0, 1);
+    const bar = findTroopBar(ratio);
+    if (!bar) {
+      hideMarker();
+      return;
+    }
+
+    const rect = bar.getBoundingClientRect();
+    if (!rect.width) {
+      hideMarker();
+      return;
+    }
+
+    marker.style.display = 'block';
+    marker.style.left = `${rect.left}px`;
+    marker.style.width = `${rect.width}px`;
+    marker.style.top = `${rect.top - MARKER_GAP_PX - MARKER_HEIGHT_PX}px`;
+    marker.style.opacity = String(state.opacity);
+
+    const colour = ratio <= RESERVE_RATIO ? PALETTE.saving : PALETTE.ready;
+    markerPin.style.left = `${ratio * 100}%`;
+    markerPin.style.background = colour;
+    markerPin.style.boxShadow = `0 0 5px ${colour}`;
+  }
+
   /**
    * Recomputes the hint shown in the overlay.
    *
@@ -444,10 +698,15 @@
    * give away everything above the reserve.
    */
   function renderAdvice() {
-    if (!widget || !state.visible) return;
+    if (!widget) return;
+    if (!state.visible) {
+      hideMarker();
+      return;
+    }
 
     const strings = t(state.lang);
     const troops = readTroopCounter();
+    renderMarker(troops);
 
     if (!troops) {
       // Brief gaps happen while the HUD re-renders, so the last hint is kept for
@@ -639,6 +898,7 @@
 
   function init() {
     createWidget();
+    createMarker();
 
     // Registered before any work that could throw, so the popup can always
     // reach the overlay even if reading the game HUD fails.

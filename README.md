@@ -1,8 +1,4 @@
-# OpenFront Donor calculator (Probably a cheat)
-
-<blockquote>
-⚠️ <strong>Disclaimer:</strong> This script may or may not violate OpenFront.io's Terms of Service. This script is for educational purposes and does not automate any actions — it only visualizes existing game data. The author is not responsible for any issues, damages, or consequences arising from the use of this script (including account bans). Use at your own risk.
-</blockquote>
+# OpenFront Donor Calc Pro
 
 A Chrome extension for [openfront.io](https://openfront.io/) that tells you **exactly what to set the troop slider to** when donating to an ally — and sets it for you with one click.
 
@@ -102,4 +98,5 @@ Chrome and Chromium-based browsers (Edge, Brave, Opera) with Manifest V3 support
 ---
 
 ## Licence
-[Apache-2.0 license.](https://github.com/announcerUA/openfront-donor-calculator?tab=Apache-2.0-1-ov-file)
+
+MIT.

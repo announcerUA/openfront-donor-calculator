@@ -16,7 +16,11 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://openfront.io/*", "*://*.openfront.io/*"],
+      "matches": [
+        "*://openfront.io/*",
+        "*://*.openfront.io/*",
+        "*://nightly.openfront.dev/*"
+      ],
       "js": ["i18n.js", "settings.js", "content.js"],
       "run_at": "document_idle"
     }
