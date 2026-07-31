@@ -1,0 +1,303 @@
+/* ------------------------------------------------------------------ *
+ * Design tokens — mirrored from the OpenFront in-game menus:
+ * slate surfaces, 8px radii, uppercase headings, blue selection accent.
+ * ------------------------------------------------------------------ */
+:root {
+  --bg: #11161d;
+  --surface: #1b222c;
+  --surface-hover: #232c38;
+  --surface-active: #2b3644;
+  --border: #2e3947;
+  --text: #e6ecf3;
+  --text-muted: #8b98a8;
+  --accent: #3b82f6;
+  --accent-soft: rgba(59, 130, 246, 0.18);
+  --success: #23d15d;
+  --warning: #ff9f2e;
+  --radius: 8px;
+  --panel-width: 320px;
+  --panel-height: 430px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: var(--panel-width);
+  height: var(--panel-height);
+  margin: 0;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+  font-size: 13px;
+  user-select: none;
+}
+
+/* ---------------------------- Views ---------------------------- */
+
+.view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background: var(--bg);
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+.view[hidden] {
+  display: none;
+}
+
+.view--language {
+  transform: translateX(0);
+  padding: 16px 8px 8px 16px;
+}
+
+.view--enter {
+  transform: translateX(12%);
+  opacity: 0;
+}
+
+/* --------------------------- Header ---------------------------- */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.header__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.25s ease;
+}
+
+.icon-button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+#open-language:hover {
+  transform: rotate(60deg);
+}
+
+/* --------------------------- Controls -------------------------- */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.button {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.button:hover {
+  background: var(--surface-hover);
+}
+
+.button[data-state='on'] {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.button[data-state='warn'] {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.field {
+  margin-top: 16px;
+}
+
+.field__label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.field__value {
+  color: var(--text);
+}
+
+/* Pushed to the bottom of the settings view by the flex column above it. */
+.footer-link {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  /* Only as wide as its contents, so the hover target does not span the panel. */
+  align-self: flex-start;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 12px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.footer-link:hover {
+  color: var(--text);
+}
+
+.segmented {
+  display: flex;
+  gap: 6px;
+}
+
+.segmented__item {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.segmented__item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.segmented__item[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* ---------------------------- Range ---------------------------- */
+
+input[type='range'] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: -1px 0 0 -6px var(--accent), -100vw 0 0 100vw var(--accent);
+}
+
+.range {
+  overflow: hidden;
+  border-radius: 3px;
+}
+
+/* -------------------------- Language --------------------------- */
+
+.language-list {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-right: 8px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.language-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.language-list::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: var(--border);
+}
+
+.language {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-align: left;
+  /* One line per language: names are truncated rather than allowed to wrap or
+     spill out of the card. The full name is also available as a tooltip. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.language:hover {
+  background: var(--surface-hover);
+}
+
+.language[aria-selected='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.language[aria-selected='true'] {
+  font-weight: 700;
+}

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Settings view -->
+  <section class="view" id="view-settings">
+    <div class="header">
+      <h1 class="header__title" data-i18n="title">Настройки виджета</h1>
+      <button class="icon-button" id="open-language" type="button" data-i18n-title="language">⚙</button>
+    </div>
+
+    <div class="stack">
+      <button class="button" id="toggle-visibility" type="button"></button>
+      <button class="button" id="toggle-lock" type="button"></button>
+    </div>
+
+    <div class="field">
+      <div class="field__label"><span data-i18n="position"></span></div>
+      <div class="segmented" id="align-group">
+        <button class="segmented__item" type="button" data-align="left" data-i18n="left"></button>
+        <button class="segmented__item" type="button" data-align="center" data-i18n="center"></button>
+        <button class="segmented__item" type="button" data-align="right" data-i18n="right"></button>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="field__label">
+        <span data-i18n="opacity"></span>
+        <span class="field__value" id="opacity-value"></span>
+      </div>
+      <div class="range">
+        <input type="range" id="opacity" min="0.2" max="1" step="0.05" value="1">
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="field__label">
+        <span data-i18n="scale"></span>
+        <span class="field__value" id="scale-value"></span>
+      </div>
+      <div class="range">
+        <input type="range" id="scale" min="0.5" max="1.5" step="0.05" value="1">
+      </div>
+    </div>
+
+    <!-- Repository link. Replace the href with your own once the repo exists. -->
+    <a class="footer-link" id="repo-link" href="https://github.com/announcerUA/openfront-donor-calculator"
+       target="_blank" rel="noopener noreferrer">
+      <!-- GitHub mark, from the MIT-licensed Octicons set. -->
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+      </svg>
+      <span>GitHub/openfront-donor-calculator</span>
+    </a>
+  </section>
+
+  <!-- Language view -->
+  <section class="view view--language" id="view-language" hidden>
+    <div class="header">
+      <button class="icon-button" id="close-language" type="button">←</button>
+      <h1 class="header__title" data-i18n="langTitle" style="flex:1"></h1>
+    </div>
+    <div class="language-list" id="language-list"></div>
+  </section>
+
+  <script src="i18n.js"></script>
+  <script src="settings.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
