@@ -62,11 +62,17 @@
 
   /** How long the click acknowledgement stays on screen. */
   const FLASH_DURATION_MS = 280;
+  /** Clicks in one burst that toggle auto-follow mode. */
+  const AUTO_TOGGLE_CLICKS = 3;
+  /** Longest pause allowed between clicks of the same burst. */
+  const BURST_WINDOW_MS = 600;
 
   const PALETTE = {
     ready: '#23d15d',
     saving: '#ff8904',
     dragging: '#ffb020',
+    /** Auto-follow mode. Replaces the state colours outright — see below. */
+    auto: '#3b9eff',
     applied: '#63e6ff',
     error: '#ff4d4d',
     surface: 'rgba(29, 37, 47, 0.94)'
@@ -103,6 +109,11 @@
   /** Percentage currently advised, or `null` while accumulating. */
   let advisedPercent = null;
   let flashTimer = 0;
+  /** Click-burst tracking for the auto-follow toggle. */
+  let burstCount = 0;
+  let burstTimer = 0;
+  /** @type {Element|null} Cached HUD host, revalidated instead of re-queried. */
+  let hudNode = null;
   /** Timestamp until which the click acknowledgement owns the border colour. */
   let flashUntil = 0;
   let lastRescanAt = 0;
@@ -290,6 +301,7 @@
 
     widget.style.display = state.visible ? 'block' : 'none';
     widget.style.opacity = String(state.opacity);
+    if (Date.now() >= flashUntil) widget.style.boxShadow = restingShadow();
 
     if (state.unlocked) {
       // Unlocked: the overlay must receive pointer events to be draggable.
@@ -461,11 +473,19 @@
    * @returns {Element|null}
    */
   function hudRoot() {
+    // Revalidating the cached host is two cheap checks; re-querying the
+    // selector list costs a document search on every tick for no gain.
+    if (hudNode?.isConnected && isRendered(hudNode)) return hudNode;
+
+    hudNode = null;
     for (const selector of HUD_SELECTORS) {
       const element = document.querySelector(selector);
-      if (element && isRendered(element)) return element;
+      if (element && isRendered(element)) {
+        hudNode = element;
+        break;
+      }
     }
-    return null;
+    return hudNode;
   }
 
   /**
@@ -735,8 +755,18 @@
       widget.textContent = `${strings.slider} ${advisedPercent}%`;
     }
 
-    widget.style.color = isSaving ? PALETTE.saving : PALETTE.ready;
+    // Auto-follow overrides the state colours rather than sitting alongside
+    // them: while the extension drives the slider, "act now" versus "keep
+    // saving" is no longer a call the player has to make, so the mode itself is
+    // the more useful thing to signal.
+    widget.style.color = state.autoApply
+      ? PALETTE.auto
+      : isSaving ? PALETTE.saving : PALETTE.ready;
     if (!state.unlocked && Date.now() >= flashUntil) widget.style.borderColor = widget.style.color;
+
+    // Auto-follow: keep the slider on the advice as the numbers move. Writing
+    // the same value is a no-op, so this costs nothing between changes.
+    if (state.autoApply && advisedPercent !== null) applyPercentToSlider(advisedPercent);
   }
 
   /* ------------------------------------------------------------------ *
@@ -811,6 +841,17 @@
     return true;
   }
 
+  /**
+   * Resting shadow of the overlay. Auto-follow mode is announced by a permanent
+   * glow, so the player can tell at a glance that the slider is not theirs to
+   * control right now.
+   */
+  function restingShadow() {
+    return state.autoApply
+      ? `0 0 0 2px ${PALETTE.auto}66, 0 0 14px ${PALETTE.auto}99, ${BASE_SHADOW}`
+      : BASE_SHADOW;
+  }
+
   /** Briefly tints the overlay's border to acknowledge a click. */
   function flash(color) {
     // The sampler repaints the border on every tick; hold it off until the
@@ -821,7 +862,7 @@
 
     clearTimeout(flashTimer);
     flashTimer = setTimeout(() => {
-      widget.style.boxShadow = BASE_SHADOW;
+      widget.style.boxShadow = restingShadow();
       tick();
     }, FLASH_DURATION_MS);
   }
@@ -835,11 +876,52 @@
     if (state.unlocked) return;
     event.preventDefault();
 
+    // A burst of clicks toggles auto-follow. The individual clicks still apply
+    // the advice, which is harmless: the slider is already where they put it.
+    if (countBurstClick()) {
+      toggleAutoApply();
+      return;
+    }
+
     if (advisedPercent === null) {
       flash(PALETTE.saving);
       return;
     }
     flash(applyPercentToSlider(advisedPercent) ? PALETTE.applied : PALETTE.error);
+  }
+
+  /**
+   * Counts clicks arriving in quick succession.
+   *
+   * @returns {boolean} `true` on the click that completes a burst.
+   */
+  function countBurstClick() {
+    burstCount += 1;
+    clearTimeout(burstTimer);
+
+    if (burstCount >= AUTO_TOGGLE_CLICKS) {
+      burstCount = 0;
+      return true;
+    }
+    burstTimer = setTimeout(() => { burstCount = 0; }, BURST_WINDOW_MS);
+    return false;
+  }
+
+  /**
+   * Switches auto-follow on or off.
+   *
+   * The mode is persisted like any other setting, so it survives a reload and
+   * reaches every open game tab. The glow makes that state impossible to miss.
+   */
+  function toggleAutoApply() {
+    state.autoApply = !state.autoApply;
+
+    applyAppearance();
+    flash(state.autoApply ? PALETTE.auto : PALETTE.dragging);
+    if (state.autoApply && advisedPercent !== null) applyPercentToSlider(advisedPercent);
+
+    Settings.patch({ autoApply: state.autoApply })
+      .catch(() => { /* extension context invalidated */ });
   }
 
   /* ------------------------------------------------------------------ *

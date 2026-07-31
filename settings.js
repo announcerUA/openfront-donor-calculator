@@ -32,6 +32,8 @@
   const DEFAULTS = Object.freeze({
     visible: true,
     unlocked: false,
+    /** Auto-follow mode: the overlay keeps the game's slider on its advice. */
+    autoApply: false,
     opacity: 1,
     scale: 1,
     lang: 'ru',
@@ -62,6 +64,7 @@
     return {
       visible: source.visible !== false,
       unlocked: source.unlocked === true,
+      autoApply: source.autoApply === true,
       opacity: clamp(toNumber(source.opacity, DEFAULTS.opacity), 0.2, 1),
       scale: clamp(toNumber(source.scale, DEFAULTS.scale), 0.5, 1.5),
       lang: typeof source.lang === 'string' ? source.lang : DEFAULTS.lang,
