@@ -52,18 +52,33 @@
   const MIN_CLAMPABLE_VIEWPORT_PX = 240;
 
   /**
-   * Donation model: keep a defensive reserve of the troop cap and treat half of
-   * the cap as the point where donating becomes worthwhile.
+   * Donation model: keep a defensive reserve of the troop cap, and treat half
+   * of the cap as a round number to aim for while accumulating.
+   *
+   * This is deliberately *not* pinned to the game's own growth-rate peak. The
+   * troop-gain formula (https://openfront.wiki/Troops/) is
+   *
+   *   gainPerTick(c) = (10 + c^0.73 / 4) * (1 - c / max)
+   *
+   * which rises, peaks around c/max ≈ 0.42, then falls — but that peak only
+   * matters for a strategy of continuously skimming troops to hold the ratio
+   * there forever. The actual use here is bursty: accumulate for a while,
+   * then spend a big chunk at once (an attack or a donation). For that
+   * pattern, pinning the reserve to the growth peak is the wrong target: a
+   * *higher* reserve shrinks every recommended send, because more of the
+   * current total counts as untouchable. A lower, fixed floor instead lets
+   * the advised percentage — and the troop count behind it — keep growing
+   * the longer the player waits before spending, which is the point.
    */
-  const RESERVE_RATIO = 0.35;
-  const TARGET_RATIO = 0.50;
+  const RESERVE_RATIO = 0.27;
+  const TARGET_RATIO = 0.42;
   /** Slider position used while accumulating: send as little as possible. */
   const SAVING_SLIDER_PERCENT = 1;
 
   /** How long the click acknowledgement stays on screen. */
   const FLASH_DURATION_MS = 280;
   /** Clicks in one burst that toggle auto-follow mode. */
-  const AUTO_TOGGLE_CLICKS = 3;
+  const AUTO_TOGGLE_CLICKS = 2;
   /** Longest pause allowed between clicks of the same burst. */
   const BURST_WINDOW_MS = 600;
 
@@ -108,6 +123,13 @@
   let sliderNode = null;
   /** Percentage currently advised, or `null` while accumulating. */
   let advisedPercent = null;
+  /**
+   * `true` whenever the widget is showing (or about to show) the "waiting"
+   * text — no live counter has been read yet, or one hasn't been seen for
+   * longer than `STALE_ADVICE_MS`. The next counter read after that is treated
+   * as the start of a (new) match; see `disableAutoApplyForNewMatch`.
+   */
+  let awaitingMatch = true;
   let flashTimer = 0;
   /** Click-burst tracking for the auto-follow toggle. */
   let burstCount = 0;
@@ -736,11 +758,19 @@
         widget.textContent = strings.waiting;
         // No counter means no advice to apply; a click would act on stale data.
         advisedPercent = null;
+        awaitingMatch = true;
       }
       return;
     }
 
     lastAdviceAt = Date.now();
+    // The first live reading after "waiting" was shown is the start of a
+    // (new) match — reset auto-follow so it never carries over from one game
+    // to the next.
+    if (awaitingMatch) {
+      awaitingMatch = false;
+      disableAutoApplyForNewMatch();
+    }
 
     const reserve = troops.max * RESERVE_RATIO;
     const isSaving = troops.current <= reserve;
@@ -905,6 +935,28 @@
     }
     burstTimer = setTimeout(() => { burstCount = 0; }, BURST_WINDOW_MS);
     return false;
+  }
+
+  /**
+   * Forces manual control at the start of every match.
+   *
+   * Auto-follow is "fire and forget": once switched on, it stays on until the
+   * player turns it off — including across the end of a match. Left alone,
+   * that means a match which ended with auto-follow running hands the slider
+   * straight back to the extension the moment the next one loads, before the
+   * player has even looked at the new game. Forcing it off here instead means
+   * every match starts in manual mode (green/orange); the player switches
+   * auto-follow back on themselves once they are ready to hand over control.
+   */
+  function disableAutoApplyForNewMatch() {
+    if (!state.autoApply) return;
+
+    state.autoApply = false;
+    applyAppearance();
+    flash(PALETTE.dragging);
+
+    Settings.patch({ autoApply: false })
+      .catch(() => { /* extension context invalidated */ });
   }
 
   /**
