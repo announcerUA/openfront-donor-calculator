@@ -103,4 +103,4 @@ Chrome and Chromium-based browsers (Edge, Brave, Opera) with Manifest V3 support
 
 ## Licence
 
-MIT.
+Apache-2.0 license.
